@@ -694,14 +694,19 @@
     const uninstallModal = $('uninstall-modal');
     const installBtn = $('install-btn');
     let installPrompt = null;
-    let installedMode = false;
+    let relatedInstalled = false; // result of the latest getInstalledRelatedApps() query
+    let lastInstalledCheck = 0;
+    let seenInstalled = false;
 
     const runningInstalled = () =>
       window.matchMedia && matchMedia('(display-mode: standalone)').matches;
 
+    const isInstalled = () => runningInstalled() || relatedInstalled;
+
     function updateInstallButton() {
-      if (installedMode || runningInstalled()) {
-        installedMode = true;
+      const installed = isInstalled();
+      if (installed) seenInstalled = true;
+      if (installed) {
         installBtn.textContent = '📱 Uninstall app';
         installBtn.hidden = false;
       } else if (installPrompt) {
@@ -709,6 +714,10 @@
         installBtn.hidden = false;
       } else {
         installBtn.hidden = true;
+      }
+      if (seenInstalled && !installed) {
+        seenInstalled = false;
+        toast('This app is no longer installed on this device.');
       }
     }
 
@@ -749,13 +758,13 @@
 
     window.addEventListener('appinstalled', () => {
       installPrompt = null;
-      installedMode = true;
+      relatedInstalled = true;
       updateInstallButton();
       toast('App installed.');
     });
 
     installBtn.addEventListener('click', async () => {
-      if (installedMode || runningInstalled()) {
+      if (isInstalled()) {
         openUninstallDialog();
         return;
       }
@@ -766,22 +775,34 @@
       updateInstallButton();
     });
 
-    // Installed-state detection: reliable while the app runs standalone (the
-    // common case for our button); getInstalledRelatedApps() also detects a
-    // prior install from a normal browser tab on Android/Windows Chrome.
+    // Installed state is derived and re-checked continuously so the button
+    // tracks installs AND uninstalls done through the system flow:
+    // - display-mode: standalone covers the app while it runs installed;
+    // - getInstalledRelatedApps() detects a prior install from a normal
+    //   browser tab (Android/Windows Chrome), and its disappearance means
+    //   the app was uninstalled.
     updateInstallButton();
-    if (navigator.getInstalledRelatedApps) {
-      const checkInstalled = () => navigator.getInstalledRelatedApps().then((apps) => {
-        if (apps && apps.length > 0 && !installedMode) {
-          installedMode = true;
-          updateInstallButton();
-        }
-      }).catch(() => { /* needs user activation or is unsupported here */ });
-      checkInstalled();
-      document.addEventListener('pointerdown', function once() {
-        checkInstalled();
-        document.removeEventListener('pointerdown', once);
-      });
+    async function recheckInstalled(force) {
+      if (!navigator.getInstalledRelatedApps) return;
+      const now = Date.now();
+      if (!force && now - lastInstalledCheck < 10000) return;
+      lastInstalledCheck = now;
+      try {
+        const apps = await navigator.getInstalledRelatedApps();
+        relatedInstalled = !!(apps && apps.length);
+        updateInstallButton();
+      } catch { /* needs user activation on some browsers, or unsupported */ }
+    }
+    recheckInstalled(true);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) recheckInstalled(); });
+    window.addEventListener('focus', () => recheckInstalled());
+    document.addEventListener('pointerdown', () => recheckInstalled());
+    setInterval(recheckInstalled, 30000);
+    if (window.matchMedia) {
+      const displayMode = matchMedia('(display-mode: standalone)');
+      const onModeChange = () => updateInstallButton();
+      if (displayMode.addEventListener) displayMode.addEventListener('change', onModeChange);
+      else if (displayMode.addListener) displayMode.addListener(onModeChange);
     }
 
     $('uninstall-remove-first').addEventListener('click', () => {
