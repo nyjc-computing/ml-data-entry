@@ -1,4 +1,4 @@
-const CACHE = 'mlcd-shell-v2';
+const CACHE = 'mlcd-shell-v3';
 const ASSETS = [
   './',
   './index.html',

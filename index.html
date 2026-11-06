@@ -49,6 +49,8 @@
   #settings-modal::backdrop { background: rgba(15, 23, 42, .45); }
   .modal-actions { display: flex; gap: 8px; margin: 2px 0 14px; }
   .modal-footer { display: flex; justify-content: flex-end; margin-top: 14px; }
+  .stack { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+  .stack .btn { width: 100%; }
   .danger-zone { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
   .danger-zone .hint { margin-top: 6px; }
 
@@ -281,6 +283,28 @@
   </div>
 </dialog>
 
+<dialog id="uninstall-modal" aria-labelledby="uninstall-title">
+  <div class="side-head">
+    <h2 id="uninstall-title">Uninstall app</h2>
+    <button id="uninstall-close" class="btn ghost" aria-label="Close">✕</button>
+  </div>
+  <p class="hint">The app is removed by your device or browser — a web page cannot uninstall itself. Finish the steps below once you are done here.</p>
+  <div id="uninstall-data-view">
+    <p id="uninstall-count" class="status"></p>
+    <div class="stack">
+      <button id="uninstall-remove-first" class="btn primary">Remove data &amp; uninstall</button>
+      <button id="uninstall-keep-data" class="btn">Keep data, show uninstall steps</button>
+      <button id="uninstall-cancel" class="btn ghost">Cancel</button>
+    </div>
+  </div>
+  <div id="uninstall-steps-view" hidden>
+    <p id="uninstall-steps" class="status"></p>
+    <div class="modal-footer">
+      <button id="uninstall-done" class="btn primary">Done</button>
+    </div>
+  </div>
+</dialog>
+
 <aside id="sidebar" aria-label="Scatter plot of readings" aria-hidden="true">
   <div class="side-head">
     <h2>Temperature vs humidity</h2>
@@ -348,6 +372,18 @@
     saveJSON(KEY_ENTRIES, entries);
     saveJSON(KEY_SETTINGS, settings);
     saveJSON(KEY_ACTIVITY, lastActivityAt);
+  }
+
+  function resetAllData() {
+    for (const key of [KEY_ENTRIES, KEY_SETTINGS, KEY_ACTIVITY]) localStorage.removeItem(key);
+    entries = [];
+    settings = { ...DEFAULTS };
+    lastActivityAt = Date.now();
+    persist();
+    syncSettingsInputs();
+    renderTable();
+    renderChart();
+    updateReminderStatus();
   }
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
@@ -640,15 +676,7 @@
 
     $('remove-all-data').addEventListener('click', () => {
       if (!confirm('Remove all readings and reset settings? This cannot be undone.')) return;
-      for (const key of [KEY_ENTRIES, KEY_SETTINGS, KEY_ACTIVITY]) localStorage.removeItem(key);
-      entries = [];
-      settings = { ...DEFAULTS };
-      lastActivityAt = Date.now();
-      persist();
-      syncSettingsInputs();
-      renderTable();
-      renderChart();
-      updateReminderStatus();
+      resetAllData();
       settingsModal.close();
       toast('All data removed — app reset to defaults.');
     });
@@ -656,26 +684,116 @@
     $('chart-toggle').addEventListener('click', () => setSidebar(!sidebar.classList.contains('open')));
     $('sidebar-close').addEventListener('click', () => setSidebar(false));
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !settingsModal.open) setSidebar(false);
+      if (e.key === 'Escape' && !settingsModal.open && !uninstallModal.open) setSidebar(false);
     });
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js').catch(() => { /* not a secure context, e.g. file:// */ });
     }
+
+    const uninstallModal = $('uninstall-modal');
+    const installBtn = $('install-btn');
     let installPrompt = null;
+    let installedMode = false;
+
+    const runningInstalled = () =>
+      window.matchMedia && matchMedia('(display-mode: standalone)').matches;
+
+    function updateInstallButton() {
+      if (installedMode || runningInstalled()) {
+        installedMode = true;
+        installBtn.textContent = '📱 Uninstall app';
+        installBtn.hidden = false;
+      } else if (installPrompt) {
+        installBtn.textContent = '📲 Install app';
+        installBtn.hidden = false;
+      } else {
+        installBtn.hidden = true;
+      }
+    }
+
+    function platformSteps() {
+      const ua = navigator.userAgent;
+      if (/Android/i.test(ua)) {
+        return 'Android: long-press the app icon and tap Uninstall, or open the app, tap ⋮ and choose Uninstall.';
+      }
+      if (/iPhone|iPad|iPod/i.test(ua)) {
+        return 'iPhone/iPad: long-press the Home Screen icon and choose Remove Bookmark.';
+      }
+      return 'Desktop: open your browser\u2019s installed-apps list (Chrome: Settings \u2192 Apps, Edge: edge://apps) and choose Uninstall.';
+    }
+
+    function showUninstallSteps() {
+      $('uninstall-steps').textContent = platformSteps();
+      $('uninstall-data-view').hidden = true;
+      $('uninstall-steps-view').hidden = false;
+    }
+
+    function openUninstallDialog() {
+      const count = entries.length;
+      const hasData = count > 0;
+      $('uninstall-count').textContent = hasData
+        ? `This device currently stores ${count} saved reading${count === 1 ? '' : 's'}.`
+        : 'No readings are stored on this device.';
+      $('uninstall-data-view').hidden = !hasData;
+      $('uninstall-steps-view').hidden = !hasData ? false : true;
+      if (!hasData) $('uninstall-steps').textContent = platformSteps();
+      uninstallModal.showModal();
+    }
+
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       installPrompt = e;
-      $('install-btn').hidden = false;
+      updateInstallButton();
     });
-    $('install-btn').addEventListener('click', async () => {
+
+    window.addEventListener('appinstalled', () => {
+      installPrompt = null;
+      installedMode = true;
+      updateInstallButton();
+      toast('App installed.');
+    });
+
+    installBtn.addEventListener('click', async () => {
+      if (installedMode || runningInstalled()) {
+        openUninstallDialog();
+        return;
+      }
       if (!installPrompt) return;
       installPrompt.prompt();
       try { await installPrompt.userChoice; } catch { /* ignored */ }
       installPrompt = null;
-      $('install-btn').hidden = true;
+      updateInstallButton();
     });
-    window.addEventListener('appinstalled', () => { $('install-btn').hidden = true; });
+
+    // Installed-state detection: reliable while the app runs standalone (the
+    // common case for our button); getInstalledRelatedApps() also detects a
+    // prior install from a normal browser tab on Android/Windows Chrome.
+    updateInstallButton();
+    if (navigator.getInstalledRelatedApps) {
+      const checkInstalled = () => navigator.getInstalledRelatedApps().then((apps) => {
+        if (apps && apps.length > 0 && !installedMode) {
+          installedMode = true;
+          updateInstallButton();
+        }
+      }).catch(() => { /* needs user activation or is unsupported here */ });
+      checkInstalled();
+      document.addEventListener('pointerdown', function once() {
+        checkInstalled();
+        document.removeEventListener('pointerdown', once);
+      });
+    }
+
+    $('uninstall-remove-first').addEventListener('click', () => {
+      resetAllData();
+      toast('Data removed from this device.');
+      showUninstallSteps();
+    });
+    $('uninstall-keep-data').addEventListener('click', showUninstallSteps);
+    $('uninstall-cancel').addEventListener('click', () => uninstallModal.close());
+    $('uninstall-done').addEventListener('click', () => uninstallModal.close());
+    $('uninstall-close').addEventListener('click', () => uninstallModal.close());
+    uninstallModal.addEventListener('click', (e) => { if (e.target === uninstallModal) uninstallModal.close(); });
 
     checkReminder();
     setInterval(checkReminder, 20000);

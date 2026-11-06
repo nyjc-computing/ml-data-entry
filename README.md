@@ -20,7 +20,9 @@ gets a clean dataset.
   scale.
 - **PWA** — installable on phones (offline-capable via service worker); data
   persists in `localStorage` per device. A "Remove all data" action in Settings
-  resets the app.
+  resets the app. When installed, the header button becomes "Uninstall app",
+  which offers to wipe stored data first and then shows the uninstall steps for
+  your platform (the actual uninstall is done by the device or browser).
 
 ## Files
 
