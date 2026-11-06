@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comfort Data Collector</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌡️</text></svg>">
+<meta name="theme-color" content="#2563eb">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Comfort Data">
+<style>
+  :root {
+    --bg: #f3f5f8;
+    --card: #ffffff;
+    --ink: #1c2733;
+    --muted: #66707a;
+    --accent: #2563eb;
+    --danger: #b2182b;
+    --border: #e3e8ee;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 15px;
+  }
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 16px;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar h1 { font-size: 1.05rem; margin: 0; font-weight: 650; white-space: nowrap; }
+  .topbar .sub { color: var(--muted); font-size: .85rem; }
+  .spacer { flex: 1; }
+  #settings-modal {
+    border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px; width: min(540px, 92vw);
+    box-shadow: 0 12px 40px rgba(16, 24, 40, .22);
+  }
+  #settings-modal::backdrop { background: rgba(15, 23, 42, .45); }
+  .modal-actions { display: flex; gap: 8px; margin: 2px 0 14px; }
+  .modal-footer { display: flex; justify-content: flex-end; margin-top: 14px; }
+  .danger-zone { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .danger-zone .hint { margin-top: 6px; }
+
+  main { max-width: 780px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .05);
+  }
+  .card h2 { font-size: 1rem; margin: 0; font-weight: 650; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .card-head > div { display: flex; gap: 8px; }
+
+  button.btn {
+    font: inherit; font-size: .88rem;
+    padding: 7px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #fff; color: var(--ink);
+    cursor: pointer;
+  }
+  button.btn:hover { background: #f1f4f8; }
+  button.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.btn.primary:hover { background: #1d4fd7; }
+  button.btn.ghost { background: transparent; }
+  button.btn.danger { color: var(--danger); }
+
+  form#entry-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    align-items: end;
+  }
+  .field label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: 4px; }
+  .field input, .field select {
+    width: 100%;
+    font: inherit;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--ink);
+  }
+  .field input:focus, .field select:focus { outline: 2px solid #bfd3fb; border-color: var(--accent); }
+  .error { color: var(--danger); font-size: .85rem; margin: 10px 0 0; }
+  .hint { color: var(--muted); font-size: .8rem; margin: 8px 0 0; }
+  .status { font-size: .85rem; margin: 10px 0 0; }
+  .config-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .badge {
+    display: inline-block; min-width: 1.7em; text-align: center;
+    background: #eef1f5; border-radius: 999px;
+    font-size: .78rem; padding: 1px 7px; color: var(--muted);
+    vertical-align: 2px; margin-left: 4px;
+  }
+  .table-wrap {
+    max-height: 22rem; overflow: auto;
+    border: 1px solid var(--border); border-radius: 8px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+  th {
+    position: sticky; top: 0; background: #f8fafc;
+    text-align: left; font-weight: 600; color: var(--muted);
+    padding: 8px 12px; border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  td { padding: 7px 12px; border-bottom: 1px solid #f0f3f6; }
+  td.del-cell { text-align: right; width: 2.5em; }
+  button.del {
+    border: none; background: none; cursor: pointer;
+    color: var(--muted); font-size: .85rem; padding: 2px 6px; border-radius: 6px;
+  }
+  button.del:hover { background: #fdecec; color: var(--danger); }
+  #empty-msg { display: none; color: var(--muted); padding: 18px 12px; margin: 0; }
+  .empty-state table { display: none; }
+  .empty-state #empty-msg { display: block; }
+
+  .dot {
+    display: inline-block; width: 11px; height: 11px; border-radius: 50%;
+    margin-right: 7px; vertical-align: -1px;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .25);
+  }
+  .d-hot  { background: #b2182b; }
+  .d-warm { background: #fa9fb5; }
+  .d-mid  { background: #fff; box-shadow: inset 0 0 0 1.4px #111; }
+  .d-cool { background: #92c5de; }
+  .d-cold { background: #2166ac; }
+
+  #sidebar {
+    position: fixed; top: 0; right: 0; z-index: 30;
+    height: 100%; width: min(440px, 94vw);
+    background: var(--card);
+    border-left: 1px solid var(--border);
+    box-shadow: -10px 0 28px rgba(16, 24, 40, .14);
+    padding: 16px;
+    transform: translateX(105%);
+    transition: transform .25s ease;
+    display: flex; flex-direction: column; gap: 10px;
+    overflow-y: auto;
+  }
+  #sidebar.open { transform: none; }
+  .side-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .side-head h2 { font-size: 1rem; margin: 0; font-weight: 650; }
+  #chart svg { width: 100%; height: auto; display: block; }
+  .grid { stroke: #e6eaf0; stroke-width: 1; }
+  .axis { stroke: #9aa4af; stroke-width: 1.2; }
+  .tick { font-size: 10px; fill: var(--muted); }
+  .axis-label { font-size: 11px; fill: #444d56; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .82rem; }
+  .legend-item { white-space: nowrap; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+    z-index: 40;
+    background: #222d38; color: #fff;
+    padding: 10px 18px; border-radius: 999px;
+    font-size: .9rem; box-shadow: 0 4px 16px rgba(0, 0, 0, .25);
+    max-width: 90vw;
+  }
+  #toast[hidden] { display: none; }
+
+  @media (max-width: 560px) { .topbar .sub { display: none; } }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <span aria-hidden="true">🌡️</span>
+  <h1>Comfort Data Collector</h1>
+  <span class="sub">ML lesson data entry</span>
+  <div class="spacer"></div>
+  <button id="install-btn" class="btn" hidden>📲 Install app</button>
+  <button id="settings-open" class="btn" aria-haspopup="dialog" aria-controls="settings-modal">⚙️ Settings</button>
+  <button id="chart-toggle" class="btn" aria-expanded="false" aria-controls="sidebar">📈 Visualise my data</button>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Log a reading</h2>
+    <form id="entry-form" novalidate>
+      <div class="field">
+        <label for="f-temp">Temperature (°C)</label>
+        <input id="f-temp" type="number" step="0.1" placeholder="e.g. 26.5" required>
+      </div>
+      <div class="field">
+        <label for="f-rh">Relative humidity (%)</label>
+        <input id="f-rh" type="number" step="1" min="0" max="100" placeholder="e.g. 70" required>
+      </div>
+      <div class="field">
+        <label for="f-comfort">Comfort level</label>
+        <select id="f-comfort" required>
+          <option value="" selected disabled>Choose…</option>
+          <option>too warm</option>
+          <option>slightly warm</option>
+          <option>comfortable</option>
+          <option>slightly cold</option>
+          <option>too cold</option>
+        </select>
+      </div>
+      <div class="field">
+        <button type="submit" class="btn primary">Add reading</button>
+      </div>
+    </form>
+    <p id="form-error" class="error" role="alert" hidden></p>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Readings <span id="entry-count" class="badge">0</span></h2>
+      <div>
+        <button id="export-csv" class="btn ghost">Export CSV</button>
+        <button id="clear-all" class="btn ghost danger">Clear all</button>
+      </div>
+    </div>
+    <div id="table-wrap" class="table-wrap empty-state">
+      <table>
+        <thead>
+          <tr><th>Time</th><th>Temp (°C)</th><th>RH (%)</th><th>Comfort</th><th></th></tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+      <p id="empty-msg">No readings yet — log your first one above.</p>
+    </div>
+  </section>
+</main>
+
+<dialog id="settings-modal" aria-labelledby="settings-title">
+  <div class="side-head">
+    <h2 id="settings-title">Settings</h2>
+    <button id="settings-close" class="btn ghost" aria-label="Close settings">✕</button>
+  </div>
+  <div class="modal-actions">
+    <button id="reminder-toggle" class="btn">Turn on reminders</button>
+    <button id="reminder-test" class="btn ghost">Test</button>
+  </div>
+  <div class="config-row">
+    <div class="field">
+      <label for="s-int-h">Every — hours</label>
+      <input id="s-int-h" type="number" min="0" max="24" step="1">
+    </div>
+    <div class="field">
+      <label for="s-int-m">…and minutes</label>
+      <input id="s-int-m" type="number" min="0" max="59" step="1">
+    </div>
+  </div>
+  <div class="config-row">
+    <div class="field">
+      <label for="s-quiet-start">Quiet from</label>
+      <input id="s-quiet-start" type="time">
+    </div>
+    <div class="field">
+      <label for="s-quiet-end">Quiet until</label>
+      <input id="s-quiet-end" type="time">
+    </div>
+  </div>
+  <p id="reminder-status" class="status" aria-live="polite"></p>
+  <p class="hint">Reminders repeat at this interval until a reading is logged. No reminders are sent during quiet hours.</p>
+  <div class="danger-zone">
+    <button id="remove-all-data" class="btn ghost danger">Remove all data</button>
+    <p class="hint">Deletes every reading and resets reminders to their defaults. Cannot be undone.</p>
+  </div>
+  <div class="modal-footer">
+    <button id="settings-done" class="btn primary">Done</button>
+  </div>
+</dialog>
+
+<aside id="sidebar" aria-label="Scatter plot of readings" aria-hidden="true">
+  <div class="side-head">
+    <h2>Temperature vs humidity</h2>
+    <button id="sidebar-close" class="btn ghost" aria-label="Close sidebar">✕</button>
+  </div>
+  <div id="chart"></div>
+  <div id="legend" class="legend"></div>
+  <p class="hint">Each dot is one reading; its colour shows the comfort level.</p>
+</aside>
+
+<div id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+(() => {
+  'use strict';
+
+  const COMFORT = ['too warm', 'slightly warm', 'comfortable', 'slightly cold', 'too cold'];
+  const COLORS = {
+    'too warm': '#b2182b',
+    'slightly warm': '#fa9fb5',
+    'comfortable': '#ffffff',
+    'slightly cold': '#92c5de',
+    'too cold': '#2166ac',
+  };
+  const DOT_CLASS = {
+    'too warm': 'd-hot',
+    'slightly warm': 'd-warm',
+    'comfortable': 'd-mid',
+    'slightly cold': 'd-cool',
+    'too cold': 'd-cold',
+  };
+
+  const KEY_ENTRIES = 'mlcd.v1.entries';
+  const KEY_SETTINGS = 'mlcd.v1.settings';
+  const KEY_ACTIVITY = 'mlcd.v1.lastActivityAt';
+  const DEFAULTS = { remindersOn: false, intervalMin: 60, quietStart: '22:00', quietEnd: '06:00' };
+
+  const $ = (id) => document.getElementById(id);
+
+  function loadJSON(key, fallback) {
+    try { const v = JSON.parse(localStorage.getItem(key)); return v === null || v === undefined ? fallback : v; }
+    catch { return fallback; }
+  }
+  function saveJSON(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
+  }
+
+  let entries = loadJSON(KEY_ENTRIES, []).filter(e =>
+    e && COMFORT.includes(e.comfort) && Number.isFinite(e.temp) && Number.isFinite(e.rh));
+  let settings = { ...DEFAULTS, ...loadJSON(KEY_SETTINGS, {}) };
+  settings.remindersOn = settings.remindersOn === true;
+  if (!Number.isFinite(settings.intervalMin) || settings.intervalMin < 1) settings.intervalMin = DEFAULTS.intervalMin;
+  if (!/^\d{1,2}:\d{2}$/.test(settings.quietStart || '')) settings.quietStart = DEFAULTS.quietStart;
+  if (!/^\d{1,2}:\d{2}$/.test(settings.quietEnd || '')) settings.quietEnd = DEFAULTS.quietEnd;
+  settings.quietStart = normTime(settings.quietStart);
+  settings.quietEnd = normTime(settings.quietEnd);
+  let lastActivityAt = loadJSON(KEY_ACTIVITY, null);
+  if (!Number.isFinite(lastActivityAt)) lastActivityAt = Date.now();
+
+  function normTime(t) {
+    const [h, m] = t.split(':');
+    return String(h).padStart(2, '0') + ':' + m;
+  }
+  function persist() {
+    saveJSON(KEY_ENTRIES, entries);
+    saveJSON(KEY_SETTINGS, settings);
+    saveJSON(KEY_ACTIVITY, lastActivityAt);
+  }
+  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+
+  const fmtTime = (ts) => new Date(ts).toLocaleString(undefined, {
+    day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+  const fmtClock = (ts) => new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+  const fmtNum = (n) => String(Number(n.toFixed(1)));
+
+  let toastTimer;
+  function toast(msg) {
+    const el = $('toast');
+    el.textContent = msg;
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.hidden = true; }, 4000);
+  }
+
+  function toMinutes(hhmm) {
+    const [h, m] = hhmm.split(':').map(Number);
+    return h * 60 + m;
+  }
+  function inQuietHours(date) {
+    const qs = toMinutes(settings.quietStart), qe = toMinutes(settings.quietEnd);
+    if (qs === qe) return false;
+    const m = date.getHours() * 60 + date.getMinutes();
+    return qs < qe ? m >= qs && m < qe : m >= qs || m < qe;
+  }
+
+  const notifSupported = () => 'Notification' in window;
+  const notifPermission = () => notifSupported() ? Notification.permission : 'denied';
+
+  const nextDueAt = () => lastActivityAt + settings.intervalMin * 60000;
+
+  function updateReminderStatus() {
+    $('reminder-toggle').textContent = settings.remindersOn ? 'Turn off reminders' : 'Turn on reminders';
+    const el = $('reminder-status');
+    if (!settings.remindersOn) { el.textContent = 'Reminders are off.'; return; }
+    const perm = notifPermission();
+    const channel = !notifSupported()
+      ? 'in-page banners (this browser does not support notifications)'
+      : perm === 'granted' ? 'browser notifications'
+      : perm === 'denied' ? 'in-page banners (notifications are blocked in browser settings)'
+      : 'in-page banners (notification permission not granted)';
+    el.textContent = inQuietHours(new Date())
+      ? `Quiet hours (${settings.quietStart}–${settings.quietEnd}) — reminders paused. Channel: ${channel}.`
+      : `On — next reminder at ${fmtClock(nextDueAt())}. Channel: ${channel}.`;
+  }
+
+  function fireReminder() {
+    if (notifSupported() && Notification.permission === 'granted') {
+      const n = new Notification('Time to log a reading', {
+        body: 'Please enter temperature, humidity and your comfort level.',
+        tag: 'mlcd-reminder',
+      });
+      n.addEventListener('click', () => { window.focus(); n.close(); });
+    } else {
+      toast('⏰ Time to log a reading!');
+    }
+  }
+
+  function checkReminder() {
+    if (settings.remindersOn) {
+      const now = Date.now();
+      if (!inQuietHours(new Date()) && now >= nextDueAt()) {
+        fireReminder();
+        lastActivityAt = now;
+        persist();
+      }
+    }
+    updateReminderStatus();
+  }
+
+  function clampInt(v, lo, hi) {
+    const n = Math.round(Number(v));
+    if (!Number.isFinite(n)) return 0;
+    return Math.min(hi, Math.max(lo, n));
+  }
+  function applyIntervalFromInputs() {
+    const h = clampInt($('s-int-h').value, 0, 24);
+    const m = clampInt($('s-int-m').value, 0, 59);
+    settings.intervalMin = Math.max(1, h * 60 + m);
+    persist();
+    updateReminderStatus();
+  }
+  function syncSettingsInputs() {
+    $('s-int-h').value = Math.floor(settings.intervalMin / 60);
+    $('s-int-m').value = settings.intervalMin % 60;
+    $('s-quiet-start').value = settings.quietStart;
+    $('s-quiet-end').value = settings.quietEnd;
+  }
+
+  function renderTable() {
+    const sorted = [...entries].sort((a, b) => b.ts - a.ts);
+    $('entry-count').textContent = entries.length;
+    $('table-wrap').classList.toggle('empty-state', sorted.length === 0);
+    $('table-body').innerHTML = sorted.map(e => `
+      <tr>
+        <td>${fmtTime(e.ts)}</td>
+        <td>${fmtNum(e.temp)}</td>
+        <td>${fmtNum(e.rh)}</td>
+        <td><span class="dot ${DOT_CLASS[e.comfort]}"></span>${e.comfort}</td>
+        <td class="del-cell"><button class="del" data-id="${e.id}" aria-label="Delete reading">✕</button></td>
+      </tr>`).join('');
+  }
+
+  function renderLegend() {
+    $('legend').innerHTML = COMFORT.map(c =>
+      `<span class="legend-item"><span class="dot ${DOT_CLASS[c]}"></span>${c}</span>`).join('');
+  }
+
+  function niceTicks(lo, hi, count) {
+    const span = hi - lo;
+    if (span <= 0) return [lo];
+    const raw = span / count;
+    const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const norm = raw / mag;
+    const step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
+    const ticks = [];
+    for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) {
+      ticks.push(Number(v.toFixed(6)));
+    }
+    return ticks;
+  }
+  function domain(vals, fallback, minSpan) {
+    if (!vals.length) return fallback.slice();
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    if (hi - lo < minSpan) { const c = (lo + hi) / 2; lo = c - minSpan / 2; hi = c + minSpan / 2; }
+    const pad = (hi - lo) * 0.12;
+    return [lo - pad, hi + pad];
+  }
+  const fmtTick = (t) => {
+    const v = Number(t.toFixed(1));
+    return Number.isInteger(v) ? v : v.toFixed(1);
+  };
+
+  function renderChart() {
+    const W = 420, H = 330, ml = 46, mr = 14, mt = 14, mb = 40;
+    const iw = W - ml - mr, ih = H - mt - mb;
+    const [xlo, xhi] = domain(entries.map(e => e.rh), [0, 100], 5);
+    const [ylo, yhi] = domain(entries.map(e => e.temp), [18, 32], 2);
+    const X = (v) => ml + (v - xlo) / (xhi - xlo) * iw;
+    const Y = (v) => mt + (1 - (v - ylo) / (yhi - ylo)) * ih;
+
+    const parts = [];
+    for (const t of niceTicks(xlo, xhi, 5)) {
+      parts.push(`<line x1="${X(t)}" y1="${mt}" x2="${X(t)}" y2="${mt + ih}" class="grid"/>`);
+      parts.push(`<text x="${X(t)}" y="${mt + ih + 14}" class="tick" text-anchor="middle">${fmtTick(t)}</text>`);
+    }
+    for (const t of niceTicks(ylo, yhi, 4)) {
+      parts.push(`<line x1="${ml}" y1="${Y(t)}" x2="${ml + iw}" y2="${Y(t)}" class="grid"/>`);
+      parts.push(`<text x="${ml - 6}" y="${Y(t) + 3.5}" class="tick" text-anchor="end">${fmtTick(t)}</text>`);
+    }
+    parts.push(`<line x1="${ml}" y1="${mt}" x2="${ml}" y2="${mt + ih}" class="axis"/>`);
+    parts.push(`<line x1="${ml}" y1="${mt + ih}" x2="${ml + iw}" y2="${mt + ih}" class="axis"/>`);
+    parts.push(`<text x="${ml + iw / 2}" y="${H - 6}" class="axis-label" text-anchor="middle">Relative humidity (%)</text>`);
+    parts.push(`<text x="12" y="${mt + ih / 2}" class="axis-label" text-anchor="middle" transform="rotate(-90 12 ${mt + ih / 2})">Temperature (°C)</text>`);
+
+    if (!entries.length) {
+      parts.push(`<text x="${ml + iw / 2}" y="${mt + ih / 2}" class="tick" text-anchor="middle">No readings yet</text>`);
+    } else {
+      const chrono = [...entries].sort((a, b) => a.ts - b.ts);
+      for (const e of chrono) {
+        const mid = e.comfort === 'comfortable';
+        parts.push(`<circle cx="${X(e.rh).toFixed(1)}" cy="${Y(e.temp).toFixed(1)}" r="5.5" fill="${COLORS[e.comfort]}" stroke="${mid ? '#111' : 'rgba(0,0,0,0.35)'}" stroke-width="${mid ? 1.4 : 1}"><title>${fmtTime(e.ts)} — ${fmtNum(e.temp)} °C, ${fmtNum(e.rh)} %, ${e.comfort}</title></circle>`);
+      }
+    }
+    $('chart').innerHTML =
+      `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Scatter plot of temperature against relative humidity">${parts.join('')}</svg>`;
+  }
+
+  const sidebar = $('sidebar');
+  function setSidebar(open) {
+    sidebar.classList.toggle('open', open);
+    sidebar.setAttribute('aria-hidden', String(!open));
+    $('chart-toggle').setAttribute('aria-expanded', String(open));
+    try { sidebar.inert = !open; } catch { /* inert unsupported */ }
+    if (open) renderChart();
+  }
+
+  function init() {
+    syncSettingsInputs();
+    renderLegend();
+    renderTable();
+    renderChart();
+    updateReminderStatus();
+    setSidebar(false);
+
+    $('entry-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const err = $('form-error');
+      const tempRaw = $('f-temp').value.trim();
+      const rhRaw = $('f-rh').value.trim();
+      const temp = Number(tempRaw);
+      const rh = Number(rhRaw);
+      const comfort = $('f-comfort').value;
+      let msg = '';
+      if (tempRaw === '' || !Number.isFinite(temp)) msg = 'Enter a temperature in °C.';
+      else if (temp < -10 || temp > 55) msg = 'Temperature should be between −10 °C and 55 °C.';
+      else if (rhRaw === '' || !Number.isFinite(rh) || rh < 0 || rh > 100) msg = 'Relative humidity must be between 0 and 100%.';
+      else if (!COMFORT.includes(comfort)) msg = 'Choose a comfort level.';
+      if (msg) { err.textContent = msg; err.hidden = false; return; }
+      err.hidden = true;
+      entries.push({ id: uid(), ts: Date.now(), temp, rh, comfort });
+      lastActivityAt = Date.now();
+      persist();
+      renderTable();
+      renderChart();
+      updateReminderStatus();
+      e.target.reset();
+      $('f-temp').focus();
+      toast('Reading saved ✓');
+    });
+
+    $('table-body').addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-id]');
+      if (!btn || !confirm('Delete this reading?')) return;
+      entries = entries.filter(en => en.id !== btn.dataset.id);
+      persist();
+      renderTable();
+      renderChart();
+    });
+
+    $('clear-all').addEventListener('click', () => {
+      if (!entries.length) return;
+      if (!confirm(`Delete all ${entries.length} readings? This cannot be undone.`)) return;
+      entries = [];
+      persist();
+      renderTable();
+      renderChart();
+    });
+
+    $('export-csv').addEventListener('click', () => {
+      if (!entries.length) { toast('Nothing to export yet.'); return; }
+      const rows = [['timestamp_iso', 'temperature_c', 'relative_humidity_pct', 'comfort_level']];
+      for (const e of [...entries].sort((a, b) => a.ts - b.ts)) {
+        rows.push([new Date(e.ts).toISOString(), e.temp, e.rh, e.comfort]);
+      }
+      const csv = rows.map(r => r.map(v => `"${String(v).replaceAll('"', '""')}"`).join(',')).join('\r\n');
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+      const a = Object.assign(document.createElement('a'), { href: url, download: 'comfort-data.csv' });
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    $('reminder-toggle').addEventListener('click', async () => {
+      if (settings.remindersOn) {
+        settings.remindersOn = false;
+        toast('Reminders off.');
+      } else {
+        if (notifSupported() && Notification.permission === 'default') {
+          try { await Notification.requestPermission(); } catch { /* ignored */ }
+        }
+        settings.remindersOn = true;
+        lastActivityAt = Date.now();
+        toast(`Reminders on — next one at ${fmtClock(nextDueAt())}.`);
+      }
+      persist();
+      updateReminderStatus();
+    });
+
+    $('reminder-test').addEventListener('click', () => {
+      if (notifSupported() && Notification.permission === 'default') {
+        Notification.requestPermission().then((p) => {
+          if (p === 'granted') fireReminder();
+          else { fireReminder(); }
+        }).catch(() => fireReminder());
+      } else {
+        fireReminder();
+      }
+    });
+
+    $('s-int-h').addEventListener('change', applyIntervalFromInputs);
+    $('s-int-m').addEventListener('change', applyIntervalFromInputs);
+    for (const id of ['s-quiet-start', 's-quiet-end']) {
+      $(id).addEventListener('change', (e) => {
+        const key = id === 's-quiet-start' ? 'quietStart' : 'quietEnd';
+        const dflt = id === 's-quiet-start' ? DEFAULTS.quietStart : DEFAULTS.quietEnd;
+        settings[key] = /^\d{2}:\d{2}$/.test(e.target.value) ? e.target.value : dflt;
+        syncSettingsInputs();
+        persist();
+        updateReminderStatus();
+      });
+    }
+
+    const settingsModal = $('settings-modal');
+    $('settings-open').addEventListener('click', () => settingsModal.showModal());
+    $('settings-close').addEventListener('click', () => settingsModal.close());
+    $('settings-done').addEventListener('click', () => settingsModal.close());
+    settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) settingsModal.close(); });
+
+    $('remove-all-data').addEventListener('click', () => {
+      if (!confirm('Remove all readings and reset settings? This cannot be undone.')) return;
+      for (const key of [KEY_ENTRIES, KEY_SETTINGS, KEY_ACTIVITY]) localStorage.removeItem(key);
+      entries = [];
+      settings = { ...DEFAULTS };
+      lastActivityAt = Date.now();
+      persist();
+      syncSettingsInputs();
+      renderTable();
+      renderChart();
+      updateReminderStatus();
+      settingsModal.close();
+      toast('All data removed — app reset to defaults.');
+    });
+
+    $('chart-toggle').addEventListener('click', () => setSidebar(!sidebar.classList.contains('open')));
+    $('sidebar-close').addEventListener('click', () => setSidebar(false));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !settingsModal.open) setSidebar(false);
+    });
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => { /* not a secure context, e.g. file:// */ });
+    }
+    let installPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      installPrompt = e;
+      $('install-btn').hidden = false;
+    });
+    $('install-btn').addEventListener('click', async () => {
+      if (!installPrompt) return;
+      installPrompt.prompt();
+      try { await installPrompt.userChoice; } catch { /* ignored */ }
+      installPrompt = null;
+      $('install-btn').hidden = true;
+    });
+    window.addEventListener('appinstalled', () => { $('install-btn').hidden = true; });
+
+    checkReminder();
+    setInterval(checkReminder, 20000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) checkReminder(); });
+    window.addEventListener('focus', checkReminder);
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
